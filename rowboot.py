@@ -1,17 +1,20 @@
 import discord
 client = discord.Client()
 
+#needed for !pact and !frac
 import time
-start = time.time()
+start = time.time() #get the start time (ctime)
 import datetime
-start_date = datetime.datetime.utcnow()
+start_date = datetime.datetime.utcnow() # get the start date
+#to find the current date/time : date = start_date + datetime.timedelta( seconds = (time.time() - start))
 
+#import the passwords/ e-mail / master info for the bot, see private.py
 import private
 bot_email = private.bot_email
 bot_password = private.bot_password
 master = private.master
 
-
+#used for !frac
 frac_list = [ 
 'Solid Ocean, Underground Facility, Urban Battleground',
 'Aetherblade, Thaumanova Reactor, Molten Furnace',
@@ -30,7 +33,7 @@ frac_list = [
 ];
 
 
-
+#used for !pact
 pact_supply_network_locations = [
 '[&BIkHAAA=] [&BC0AAAA=] [&BDoBAAA=] [&BO4CAAA=] [&BIUCAAA=] [&BCECAAA=]',
 '[&BIcHAAA=] [&BKYBAAA=] [&BEwDAAA=] [&BNIEAAA=] [&BIMCAAA=] [&BA8CAAA=]',
@@ -47,9 +50,9 @@ def reply(author, message, msg, talk):
 def join(author, message):
 	if author.id == master:
 		join_link = message.content.strip('!join ')
-		print('attempting join: %s' % join_link )
+		print('attempting join: %s' % join_link ) #debug/logging
 		yield from client.accept_invite(join_link)
-		print('sucess!\n')
+		print('sucess!\n')#debug
 		msg = "joined"
 		yield from reply(author, message, msg, False)
 	else:
@@ -57,13 +60,13 @@ def join(author, message):
 		yield from reply(author, message, msg, False)
 
 def test(author, message):
-	print("test requst from {0} in {1}\n".format(author, message.channel))
+	print("test requst from {0} in {1}\n".format(author, message.channel)) #debug/logging
 	msg = "Hello {0}.  Use !help for a list of commands".format(author)
 	yield from reply(author, message, msg, False)
 	
 def leave(author, message):
 	if author.id == master:
-		print('leaving: %s' % message.server)
+		print('leaving: %s' % message.server) #debug/logging
 		msg = 'goodbye'
 		yield from reply(author, message, msg, False)
 		yield from client.leave_server(message.server)
@@ -72,17 +75,17 @@ def leave(author, message):
 		yield from reply(author, message, msg, False)
 
 def frac(author, message,date):
-	print('Fractal request received')
-	print("Time: {0}:{1}:{2}".format(date.timetuple()[3],date.timetuple()[4],date.timetuple()[5]))
-	print("Week: {0}, Day of Week: {1}".format(date.isocalendar()[1],date.isocalendar()[2]))
+	print('Fractal request received') #debug/logging
+	print("Time: {0}:{1}:{2}".format(date.timetuple()[3],date.timetuple()[4],date.timetuple()[5])) #debug/logging
+	print("Week: {0}, Day of Week: {1}".format(date.isocalendar()[1],date.isocalendar()[2])) #debug/logging
 	daily_num = date.isocalendar()[2] - 1 + ((date.isocalendar()[1] % 2) * 7)
-	print("{0}: {1}".format(daily_num, frac_list[daily_num]))
+	print("{0}: {1}".format(daily_num, frac_list[daily_num])) #debug/logging
 	msg = 'The daily fractals are %s.' % frac_list[daily_num]
-	print('%s\n' % msg)
+	print('%s\n' % msg) #debug
 	yield from reply(author, message, msg, False)
 
 def help(author, message):
-	print("{0} needs some help\n".format(author))
+	print("{0} needs some help\n".format(author)) #debug/logging
 	msg = "Command list: !frac, !pact, !help, !test"
 	yield from reply(author, message, msg, False)
 	if author.id == master:
@@ -90,12 +93,12 @@ def help(author, message):
 		yield from reply(author, message, msg, False)
 		
 def pact(author, message,date):
-	print("Pact Supply Network Agent request received")
-	print("Time: {0}:{1}:{2}".format(date.timetuple()[3],date.timetuple()[4],date.timetuple()[5]))
+	print("Pact Supply Network Agent request received") #debug/logging
+	print("Time: {0}:{1}:{2}".format(date.timetuple()[3],date.timetuple()[4],date.timetuple()[5])) #debug/logging
 	daily_num = date.isocalendar()[2] - 1
 	if date.timetuple()[3] > 8:
 		daily_num = (daily_num + 1) % 7
-	print("{0}: {1}\n".format(daily_num,pact_supply_network_locations[daily_num]))
+	print("{0}: {1}\n".format(daily_num,pact_supply_network_locations[daily_num])) #debug/logging
 	yield from reply(author, message, pact_supply_network_locations[daily_num], False)
 
 @client.async_event
@@ -106,7 +109,7 @@ def on_message(message):
 		yield from test(author, message)
 	elif message.content.startswith('!join'):
 		yield from join(author, message)
-	elif message.content.startswith('!fuck_off'):
+	elif message.content.startswith('!fuck_off'): #you must be firm with the bot
 		yield from leave(author, message)
 	elif message.content.startswith('!frac'):
 		yield from frac(author, message,date)
@@ -115,5 +118,5 @@ def on_message(message):
 	elif message.content.startswith('!pact'):
 		yield from pact(author, message,date)
 		
-print("beep boop\n")
+print("beep boop\n") #debug
 client.run(bot_email,bot_password)
