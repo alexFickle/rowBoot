@@ -3,7 +3,7 @@ client = discord.Client()
 
 #needed for !pact and !frac
 import time
-start = time.time() #get the start time (ctime)
+start = time.time() #get the start time
 import datetime
 start_date = datetime.datetime.utcnow() # get the start date
 #to find the current date/time : date = start_date + datetime.timedelta( seconds = (time.time() - start))
@@ -14,23 +14,59 @@ bot_email = private.bot_email
 bot_password = private.bot_password
 master = private.master
 
-#used for !frac
-frac_list = [ 
-'Solid Ocean, Underground Facility, Urban Battleground',
-'Aetherblade, Thaumanova Reactor, Molten Furnace',
-'Cliffside, Molten Boss, Captain Mai Trin Boss',
-'Swampland, Solid Ocean, Uncategorized',
-'Aquatic Ruins, Snowblind, Thaumanova Reactor',
-'Aetherblade, Uncategorized, Volcanic',
-'Cliffside, Urban Battleground, Chaos Isles',
-'Underground Facility, Volcanic, Captain Mai Trin Boss',
-'Snowblind, Solid Ocean, Swampland',
-'Chaos Isles, Uncategorized, Urban Battleground',
-'Cliffside, Molten Furnace, Captain Mai Trin Boss',
-'Underground Facility, Thaumanova Reactor, Molten Boss',
-'Volcanic, Swampland, Aetherblade',
-'Snowblind, Chaos Isles, Aquatic Ruins'
-];
+
+import urllib.request
+import json
+import re
+numbersOnly = re.compile('[^\d]+')
+import asyncio
+fractalString = "" #stores the last given string so that unnecessary API calls are not done.
+fractalStringDate = datetime.datetime(datetime.MINYEAR,1,1).isocalendar() #stores the date to see if the last API call occured in the same day.
+
+
+@asyncio.coroutine
+def fracCheck(date):
+	global fractalStringDate
+	global fractalString
+	currentDate = date.isocalendar() #find current date, may be different then the date this function was last called during
+	if currentDate == fractalStringDate:
+		#if this function was called previously during the same day then fractalString is up to date.
+		return fractalString #no API call needed
+	print("API call needed") #debug/logging
+	fractalStringDate = currentDate
+	fractalString = "The Daily Recommended Fractals are: "
+	with urllib.request.urlopen("https://api.guildwars2.com/v2/achievements/daily") as response:
+		html = response.read()
+	string = html.decode('utf-8') #string result from the api call
+	obj = json.loads(string)
+	idList = [] #the daily fractal achievement ids
+	for element in obj["fractals"]:
+		idList.append(element["id"])
+	url = "https://api.guildwars2.com/v2/achievements?ids=" #url to be used to resolve achievment ids to names
+	for id in idList :
+		url+=str(id) + ','
+	url = url[:-1]
+	with urllib.request.urlopen(url) as response: 
+		html = response.read()
+	string = html.decode('utf-8') #string result from the api call
+	obj = json.loads(string)
+	for element in obj:
+		if not "bits" in element:
+			#the Daily Recommended N Achievement do not contain the key bits
+			fractalString += numbersOnly.sub('',element["name"])
+			fractalString += ", "
+	for element in obj:
+		if "bits" in element:
+			#the Daily Tier N (Fractal Island Name) Achievements use the key bits
+			include = True
+			for bit in element["bits"]:
+				if int(numbersOnly.sub('',bit["text"])) <= 75:
+					include = False
+			if include:
+				fractalString += element["name"][13:]
+				fractalString += ", "
+	fractalString = fractalString[:-2] + '.'
+	return fractalString
 
 
 #used for !pact
@@ -61,6 +97,7 @@ def join(author, message):
 
 def test(author, message):
 	print("test requst from {0} in {1}\n".format(author, message.channel)) #debug/logging
+	print("id:{0}\n".format(author.id)) #used to find master_id in private.py
 	msg = "Hello {0}.  Use !help for a list of commands".format(author)
 	yield from reply(author, message, msg, False)
 	
@@ -73,14 +110,11 @@ def leave(author, message):
 	else:
 		msg = 'no, you'
 		yield from reply(author, message, msg, False)
-
+		
+@asyncio.coroutine
 def frac(author, message,date):
 	print('Fractal request received') #debug/logging
-	print("Time: {0}:{1}:{2}".format(date.timetuple()[3],date.timetuple()[4],date.timetuple()[5])) #debug/logging
-	print("Week: {0}, Day of Week: {1}".format(date.isocalendar()[1],date.isocalendar()[2])) #debug/logging
-	daily_num = date.isocalendar()[2] - 1 + ((date.isocalendar()[1] % 2) * 7)
-	print("{0}: {1}".format(daily_num, frac_list[daily_num])) #debug/logging
-	msg = 'The daily fractals are %s.' % frac_list[daily_num]
+	msg = yield from fracCheck(date)
 	print('%s\n' % msg) #debug
 	yield from reply(author, message, msg, False)
 
@@ -101,6 +135,18 @@ def pact(author, message,date):
 	print("{0}: {1}\n".format(daily_num,pact_supply_network_locations[daily_num])) #debug/logging
 	yield from reply(author, message, pact_supply_network_locations[daily_num], False)
 
+def gameSet(author, message):
+	if len(message.content) > 5:	
+		yield from client.change_presence(game=discord.Game(name='NSA Recorder v2.3',url='www.nsa.gov',type=1))
+	else:
+		yield from client.change_presence(game=author.game)
+
+def quit(author):
+	if author.id == master:
+		yield from client.change_presence(status=discord.Status.offline)
+		yield from client.close()
+	
+
 @client.async_event
 def on_message(message):
 	author = message.author
@@ -112,11 +158,15 @@ def on_message(message):
 	elif message.content.startswith('!fuck_off'): #you must be firm with the bot
 		yield from leave(author, message)
 	elif message.content.startswith('!frac'):
-		yield from frac(author, message,date)
+		yield from frac(author, message, date)
 	elif message.content.startswith('!help'):
 		yield from help(author, message)
 	elif message.content.startswith('!pact'):
 		yield from pact(author, message,date)
-		
-print("beep boop\n") #debug
+	elif message.content.startswith('!game'):
+		yield from gameSet(author, message)
+	elif message.content.startswith('!die'):
+		yield from quit(author)
+
+print("starting client\n") #debug
 client.run(bot_email,bot_password)
